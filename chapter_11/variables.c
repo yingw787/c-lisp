@@ -273,6 +273,10 @@ lval* lval_copy(lval* v) {
             x->err = malloc(strlen(v->err) + 1);
             strcpy(x->err, v->err); break;
 
+        case LVAL_SYM:
+            x->sym = malloc(strlen(v->sym) + 1);
+            strcpy(x->sym, v->sym); break;
+
         /* Copy Lists by copying each sub-expression */
         case LVAL_SEXPR:
         case LVAL_QEXPR:
@@ -293,7 +297,7 @@ lval* lenv_get(lenv* e, lval* k) {
     for (int i = 0; i < e->count; i++) {
         /* Check if the stored string matches the symbol string */
         /* If it does, return a copy of the value */
-        if (strcmp(e->syms[i], k->sym) ==0) {
+        if (strcmp(e->syms[i], k->sym) == 0) {
             return lval_copy(e->vals[i]);
         }
     }
@@ -494,6 +498,29 @@ lval* builtin_div(lenv* e, lval* a) {
     return builtin_op(e, a, "/");
 }
 
+lval* builtin_def(lenv* e, lval* a) {
+    LASSERT(a, a->cell[0]->type == LVAL_QEXPR, "Function 'def' passed incorrect type!");
+
+    /* First argument is symbol list */
+    lval* syms = a->cell[0];
+
+    /* Ensure all elements of first list are symbols */
+    for (int i = 0; i < syms->count; i++) {
+        LASSERT(a, syms->cell[i]->type == LVAL_SYM, "Function 'def' cannot define non-symbol!");
+    }
+
+    /* Check correct number of symbols and values */
+    LASSERT(a, syms->count == a->count-1, "Function 'def' cannot define incorrect number of values to symbols");
+
+    /* Assign copies of values to symbols */
+    for (int i = 0; i < syms->count; i++) {
+        lenv_put(e, syms->cell[i], a->cell[i+1]);
+    }
+
+    lval_del(a);
+    return lval_sexpr();
+}
+
 void lenv_add_builtin(lenv* e, char* name, lbuiltin func) {
     lval* k = lval_sym(name);
     lval* v = lval_fun(func);
@@ -514,6 +541,9 @@ void lenv_add_builtins(lenv* e) {
     lenv_add_builtin(e, "-", builtin_sub);
     lenv_add_builtin(e, "*", builtin_mul);
     lenv_add_builtin(e, "/", builtin_div);
+
+    /* Variable Functions */
+    lenv_add_builtin(e, "def", builtin_def);
 }
 
 int main(int argc, char** argv) {
